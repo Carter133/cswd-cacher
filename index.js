@@ -76,7 +76,7 @@ class Delivery extends DatabaseObject {
   }
 
   toString() {
-    return `Delivery ${quantity} of ${product} to ${address} of ${scheduledTime}`;
+    return `Delivering ${this.quantity} ${this.product.name} to ${this.address} of ${this.scheduledTime}`;
   }
 
   static create(params) {
@@ -105,8 +105,13 @@ class ProductDao {
     throw new Error("Not implemented");
   }
 
+  // getProductByName(name) {
+  //   throw new Error("Not implemented");
+  // }
+
   getProductByName(name) {
-    throw new Error("Not implemented");
+    const products = this.getAll();
+    return products.find((product) => product.name == name);
   }
 
   update(product) {
@@ -131,10 +136,10 @@ class SessionStorageProductDao extends ProductDao {
     });
   }
 
-  getProductByName(name) {
-    const products = getAll();
-    return products.find((product) => product.name == name);
-  }
+  // getProductByName(name) {
+  //   const products = this.getAll();
+  //   return products.find((product) => product.name == name);
+  // }
 
   update(product) {
     const existingProducts = this.getAll();
@@ -142,6 +147,42 @@ class SessionStorageProductDao extends ProductDao {
       (productInList) => productInList.name == product.name,
     );
     existingProducts.splice(indexToDelete, 1, product);
+    this.database.setItem("products", JSON.stringify(existingProducts));
+  }
+}
+
+class CookieStorageProductDao extends ProductDao {
+  constructor() {
+    super();
+    this.database = document.cookie;
+  }
+
+  getAll() {
+    const cookieValue = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("products"))
+      ?.split("=")[1];
+
+    const productsData = cookieValue
+      ? JSON.parse(cookieValue)
+      : ProductDao.seeds;
+    return productsData.map(
+      (productData) => new Product(productData.name, productData.inventory),
+    );
+  }
+
+  // getProductByName(name) {
+  //   const products = this.getAll();
+  //   return products.find((product) => product.name == name);
+  // }
+
+  update(product) {
+    const existingProducts = this.getAll();
+    const indexToDelete = existingProducts.findIndex(
+      (productInList) => productInList.name == product.name,
+    );
+    existingProducts.splice(indexToDelete, 1, product);
+    document.cookie = `products=${JSON.stringify(existingProducts)};`;
   }
 }
 
@@ -163,7 +204,7 @@ class SessionStorageDeliveryDao extends DeliveryDao {
     const deliveriesInSessionStorage = this.database.getItem("deliveries");
 
     const deliveriesData = deliveriesInSessionStorage
-      ? JSON.parse(deliveriesAsJSON)
+      ? JSON.parse(deliveriesInSessionStorage)
       : [];
     return deliveriesData.map((deliveryData) => {
       return Delivery.create(deliveryData);
@@ -173,6 +214,23 @@ class SessionStorageDeliveryDao extends DeliveryDao {
     const deliveries = this.getAll();
     deliveries.push(delivery);
     this.database.setItem("deliveries", JSON.stringify(deliveries));
+  }
+}
+
+class CookieStorageDeliveryDao extends DeliveryDao {
+  getAll() {
+    const cookieValue = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("deliveries"))
+      ?.split("=")[1];
+
+    const deliveriesData = cookieValue ? JSON.parse(cookieValue) : [];
+    return deliveriesData.map((deliveryData) => new Delivery(deliveryData));
+  }
+  create(delivery) {
+    const existingDeliveries = this.getAll();
+    existingDeliveries.push(delivery);
+    document.cookie = `deliveries=${JSON.stringify(existingDeliveries)};`;
   }
 }
 
@@ -197,8 +255,10 @@ class CreateDeliveryService {
   }
 }
 
-const productDao = new SessionStorageProductDao();
-const deliveryDao = new SessionStorageDeliveryDao();
+// const productDao = new SessionStorageProductDao();
+const productDao = new CookieStorageProductDao();
+// const deliveryDao = new SessionStorageDeliveryDao();
+const deliveryDao = new CookieStorageDeliveryDao();
 const createDeliveryService = new CreateDeliveryService(
   productDao,
   deliveryDao,
@@ -214,39 +274,44 @@ for (let i = 0; i < deliveries.length; i++) {
 }
 
 const productNameSelect = document.querySelector("#deliveries form select");
+const quantityInput = document.querySelector(
+  "#deliveries form input[name='quantity']",
+);
 const products = productDao.getAll();
 for (let i = 0; i < products.length; i++) {
   const product = products[i];
   const option = document.createElement("option");
   option.innerText = product.toString();
   option.setAttribute("value", product.name);
-  productNameSelect.appendChild(option);
+  const existingInventory = product.inventory;
+  if (i == 0) {
+    quantityInput.setAttribute("max", existingInventory);
+  }
+  if (existingInventory > 0) {
+    productNameSelect.appendChild(option);
+  }
 }
 
-const createProductForm = document.querySelector("#deliveries form");
-createProductForm.addEventListener("submit", (e) => {
-  if (fname.value === "" || lname.value === "") {
-    e.preventDefault();
-    para.textContent = "You need to fill in both names!";
-  }
+function handleChangeToProductName(event) {
+  const productName = event.target.value;
+  const selectedProduct = productDao.getProductByName(productName);
+  const existingInventory = selectedProduct.inventory;
+  quantityInput.setAttribute("max", existingInventory);
+}
+productNameSelect.addEventListener("change", handleChangeToProductName);
+
+const createDeliveryForm = document.querySelector("#deliveries form");
+createDeliveryForm.addEventListener("submit", (event) => {
+  // event.preventDefault();
+  const formData = new FormData(event.target);
+  const address = formData.get("address");
+  const scheduledTime = formData.get("scheduledTime");
+  const productName = formData.get("productName");
+  const quantity = formData.get("quantity");
+  createDeliveryService.createDelivery(
+    productName,
+    quantity,
+    address,
+    scheduledTime,
+  );
 });
-
-// class CookieStorageProductDAO extends ProductDao {
-//   constructor(){
-//     this.database = document.cookie;
-//   }
-
-//   getAll() {
-
-//     const productAsJSON = this.database.getItem("products");
-//     return productAsJSON ? JSON.parse(productAsJSON) : [];
-//   }
-
-//   update(product) {
-//     const existingProducts = this.getAll();
-//     const indexToDelete = existingProducts.findIndex(
-//       (productInList) => productInList.name == product.name,
-//     );
-//     existingProducts.splice(indexToDelete, 1, product);
-//   }
-// }
