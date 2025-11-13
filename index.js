@@ -255,10 +255,10 @@ class CreateDeliveryService {
   }
 }
 
-// const productDao = new SessionStorageProductDao();
-const productDao = new CookieStorageProductDao();
-// const deliveryDao = new SessionStorageDeliveryDao();
-const deliveryDao = new CookieStorageDeliveryDao();
+const productDao = new SessionStorageProductDao();
+// const productDao = new CookieStorageProductDao();
+const deliveryDao = new SessionStorageDeliveryDao();
+// const deliveryDao = new CookieStorageDeliveryDao();
 const createDeliveryService = new CreateDeliveryService(
   productDao,
   deliveryDao,
